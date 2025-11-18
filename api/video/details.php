@@ -1,4 +1,5 @@
 <?php
+error_log('[video/details.php] Request received: ' . json_encode($_GET));
 require_once '../db.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
@@ -11,7 +12,12 @@ if (empty($videoId)) {
     respond(['success' => false, 'error' => 'Video ID required'], 400);
 }
 
-$db = getDB();
+try {
+    $db = getDB();
+} catch (Exception $e) {
+    error_log('[video/details.php] Database error: ' . $e->getMessage());
+    respond(['success' => false, 'error' => 'Database connection failed'], 500);
+}
 
 $stmt = $db->prepare("
     SELECT 
@@ -64,7 +70,13 @@ foreach ($comments as &$comment) {
     unset($comment['username'], $comment['name'], $comment['profile_pic']);
 }
 
-$user = getAuthUser();
+try {
+    $user = getAuthUser();
+    error_log('[video/details.php] Auth user: ' . ($user ? $user['id'] : 'not authenticated'));
+} catch (Exception $e) {
+    error_log('[video/details.php] Auth error (non-fatal): ' . $e->getMessage());
+    $user = null;
+}
 $video['is_liked'] = false;
 $video['is_disliked'] = false;
 $video['is_saved'] = false;

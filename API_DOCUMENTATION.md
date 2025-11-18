@@ -6,6 +6,52 @@ All API endpoints use JSON format for requests and responses unless otherwise sp
 
 ---
 
+## ⚠️ Important: ID Formats & Authentication
+
+### ID Format Specification
+All IDs in this system use **UUID v4 format** (36 characters including hyphens):
+- **Format**: `xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`
+- **Example**: `550e8400-e29b-41d4-a716-446655440000`
+- **Length**: 36 characters (32 hex digits + 4 hyphens)
+
+This applies to:
+- User IDs
+- Channel IDs
+- Video IDs
+- Comment IDs
+- All other entity IDs
+
+### Authentication Types
+
+#### 🔓 Optional Authentication
+These endpoints work without authentication but provide enhanced data when authenticated:
+- `GET /video/details.php` - Basic info without auth, includes `is_liked`, `is_saved` flags with auth
+- `GET /channel/details.php` - Basic info without auth, includes `is_subscribed` flag with auth
+- `GET /video/list.php` - Public videos without auth, personalized with auth
+
+#### 🔒 Required Authentication
+These endpoints require a valid Bearer token:
+- All `POST` endpoints (except login/register)
+- All `/admin/*` endpoints
+- `GET /auth/me`
+- Video upload, like, comment endpoints
+- Subscription management
+
+#### 🌐 Public (No Auth)
+These endpoints are completely public:
+- `POST /auth/login`
+- `POST /auth/register`
+- `GET /health.php`
+
+### Authentication Header Format
+```
+Authorization: Bearer {your_session_token}
+```
+
+**See [API_ID_FORMAT.md](./API_ID_FORMAT.md) for detailed ID format and authentication documentation.**
+
+---
+
 ## 📋 Table of Contents
 1. [Authentication](#authentication)
 2. [User Profile](#user-profile)

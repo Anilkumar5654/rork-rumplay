@@ -64,24 +64,40 @@ function verifyPassword($password, $hash, $salt) {
 }
 
 function getAuthUser() {
-    $headers = getallheaders();
-    $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-    
-    if (!preg_match('/Bearer\s+(.+)/', $authHeader, $matches)) {
+    try {
+        $headers = getallheaders();
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        
+        if (!preg_match('/Bearer\s+(.+)/', $authHeader, $matches)) {
+            return null;
+        }
+        
+        $token = trim($matches[1]);
+        if (empty($token)) {
+            return null;
+        }
+        
+        $db = getDB();
+        
+        $stmt = $db->prepare("
+            SELECT u.* FROM users u
+            INNER JOIN sessions s ON u.id = s.user_id
+            WHERE s.token = :token AND s.expires_at > NOW()
+        ");
+        $stmt->execute(['token' => $token]);
+        
+        $user = $stmt->fetch();
+        
+        if (!$user) {
+            error_log('[getAuthUser] No valid session found for token');
+            return null;
+        }
+        
+        return $user;
+    } catch (Exception $e) {
+        error_log('[getAuthUser] Error: ' . $e->getMessage());
         return null;
     }
-    
-    $token = $matches[1];
-    $db = getDB();
-    
-    $stmt = $db->prepare("
-        SELECT u.* FROM users u
-        INNER JOIN sessions s ON u.id = s.user_id
-        WHERE s.token = :token AND s.expires_at > NOW()
-    ");
-    $stmt->execute(['token' => $token]);
-    
-    return $stmt->fetch();
 }
 
 function requireAuth() {
