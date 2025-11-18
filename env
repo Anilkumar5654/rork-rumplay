@@ -1,0 +1,29 @@
+# Frontend API Base URL
+# IMPORTANT: This points to your Hostinger backend
+# Your PHP API files are located at https://moviedbr.com/api/
+EXPO_PUBLIC_API_URL="https://moviedbr.com/api"
+
+# Backend Database Configuration (Hostinger MySQL)
+# Used by PHP API files on your Hostinger server
+# In PHP files, use 'localhost' for DB_HOST since PHP runs on same server as MySQL
+DB_HOST="localhost"
+DB_USER="u449340066_rumplay"
+DB_PASSWORD="6>E/UCiT;AYh"
+DB_NAME="u449340066_rumplay"
+DB_PORT="3306"
+DB_CHARSET="utf8mb4"
+
+# Hostinger FTP Configuration for Media Uploads
+# Files (videos/images) are uploaded directly to Hostinger via FTP
+HOSTINGER_FTP_HOST="82.25.120.38"
+HOSTINGER_FTP_USER="u449340066"
+HOSTINGER_FTP_PASSWORD="1rZ6xAyXDm[Mpt|+"
+HOSTINGER_FTP_PORT="21"
+HOSTINGER_UPLOADS_PATH="/public_html/uploads"
+
+# Public Base URL for uploaded files
+# This is where uploaded media files can be accessed
+PUBLIC_BASE_URL="https://moviedbr.com"
+
+# CORS Configuration
+CORS_ALLOWED_ORIGINS="*"
