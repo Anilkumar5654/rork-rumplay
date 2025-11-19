@@ -15,6 +15,8 @@ if (empty($videoId)) {
     respond(['success' => false, 'error' => 'Video ID required'], 400);
 }
 
+$videoId = requireValidId($videoId, 'Video ID');
+
 if (!in_array($action, ['like', 'unlike'])) {
     respond(['success' => false, 'error' => 'Invalid action'], 400);
 }

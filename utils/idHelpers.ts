@@ -206,6 +206,28 @@ export const debugId = (id: string | null | undefined, label: string = 'ID'): vo
 };
 
 /**
+ * Converts ID to 32-character format for backend API calls
+ * This ensures compatibility with the database which stores IDs in 32-char format
+ * 
+ * @param id - The ID to convert (32 or 36 character format)
+ * @returns 32-character ID without hyphens, or the original if already in correct format
+ * 
+ * @example
+ * toBackendId('550e8400-e29b-41d4-a716-446655440000')
+ * // Returns: '550e8400e29b41d4a716446655440000'
+ * 
+ * toBackendId('d4bc569e090acbbc17354bd3657adb4d')
+ * // Returns: 'd4bc569e090acbbc17354bd3657adb4d' (already correct)
+ */
+export const toBackendId = (id: string | null | undefined): string | null => {
+  if (!id || typeof id !== 'string') {
+    return null;
+  }
+  
+  return removeHyphensFromUUID(id);
+};
+
+/**
  * Type guard for checking if a value is a non-null string
  */
 export const isNonNullString = (value: unknown): value is string => {

@@ -11,6 +11,7 @@ $limit = isset($_GET['limit']) ? min((int)$_GET['limit'], 50) : 20;
 $db = getDB();
 
 if (!empty($videoId)) {
+    $videoId = requireValidId($videoId, 'Video ID');
     $stmt = $db->prepare("SELECT category, tags FROM videos WHERE id = :video_id");
     $stmt->execute(['video_id' => $videoId]);
     $currentVideo = $stmt->fetch();

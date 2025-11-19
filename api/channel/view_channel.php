@@ -9,6 +9,10 @@ $channelId = $_GET['id'] ?? null;
 $authUser = getAuthUser();
 $db = getDB();
 
+if (!empty($channelId)) {
+    $channelId = requireValidId($channelId, 'Channel ID');
+}
+
 if (!$channelId) {
     if (!$authUser) {
         respond(['success' => false, 'error' => 'Channel ID is required or user must be authenticated'], 400);
@@ -35,7 +39,9 @@ $userStmt = $db->prepare("SELECT id FROM users WHERE id = :user_id LIMIT 1");
 $userStmt->execute(['user_id' => $channel['user_id']]);
 $owner = $userStmt->fetch(PDO::FETCH_ASSOC);
 
-$apiBaseUrl = getApiBaseUrl();
+$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$apiBaseUrl = $protocol . '://' . $host;
 
 $avatarUrl = $channel['avatar'];
 if ($avatarUrl && strpos($avatarUrl, '/uploads/') === 0) {

@@ -14,6 +14,8 @@ if (empty($channelId)) {
     respond(['success' => false, 'error' => 'Channel ID required'], 400);
 }
 
+$channelId = requireValidId($channelId, 'Channel ID');
+
 $db = getDB();
 
 $stmt = $db->prepare("SELECT id FROM channels WHERE id = :channel_id");

@@ -12,6 +12,8 @@ if (empty($videoId)) {
     respond(['success' => false, 'error' => 'Video ID required'], 400);
 }
 
+$videoId = requireValidId($videoId, 'Video ID');
+
 $db = getDB();
 
 $stmt = $db->prepare("SELECT id FROM videos WHERE id = :video_id");

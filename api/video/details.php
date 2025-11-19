@@ -12,6 +12,8 @@ if (empty($videoId)) {
     respond(['success' => false, 'error' => 'Video ID required'], 400);
 }
 
+$videoId = requireValidId($videoId, 'Video ID');
+
 error_log('[video/details.php] Looking for video: ' . $videoId);
 
 try {

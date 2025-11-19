@@ -38,9 +38,15 @@ function getDB() {
     return $db;
 }
 
+/**
+ * Generates a 32-character UUID (no hyphens) for database consistency
+ * Database uses char(32) format: d4bc569e090acbbc17354bd3657adb4d
+ * 
+ * @return string 32-character UUID without hyphens
+ */
 function generateUUID() {
     return sprintf(
-        '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+        '%04x%04x%04x%04x%04x%04x%04x%04x',
         mt_rand(0, 0xffff), mt_rand(0, 0xffff),
         mt_rand(0, 0xffff),
         mt_rand(0, 0x0fff) | 0x4000,
@@ -124,6 +130,59 @@ function respond($data, $statusCode = 200) {
     http_response_code($statusCode);
     echo json_encode($data);
     exit();
+}
+
+/**
+ * Normalizes ID to 32-character format (removes hyphens)
+ * Supports both 32-char (d4bc569e090acbbc17354bd3657adb4d) 
+ * and 36-char (550e8400-e29b-41d4-a716-446655440000) formats
+ * 
+ * @param string $id The ID to normalize
+ * @return string|null Normalized 32-character ID or null if invalid
+ */
+function normalizeId($id) {
+    if (empty($id) || !is_string($id)) {
+        return null;
+    }
+    
+    $clean = str_replace('-', '', trim($id));
+    
+    if (strlen($clean) !== 32) {
+        error_log('[normalizeId] Invalid ID length: ' . strlen($clean) . ' (expected 32). ID: ' . $id);
+        return null;
+    }
+    
+    if (!ctype_xdigit($clean)) {
+        error_log('[normalizeId] Invalid ID format (not hex): ' . $id);
+        return null;
+    }
+    
+    return strtolower($clean);
+}
+
+/**
+ * Validates and normalizes ID, throws error response if invalid
+ * 
+ * @param string $id The ID to validate
+ * @param string $fieldName Name of the field for error message
+ * @return string Normalized 32-character ID
+ */
+function requireValidId($id, $fieldName = 'ID') {
+    $normalized = normalizeId($id);
+    
+    if ($normalized === null) {
+        respond([
+            'success' => false, 
+            'error' => $fieldName . ' is invalid. Expected 32-character format.',
+            'debug' => [
+                'received' => $id,
+                'length' => strlen($id ?? ''),
+                'expected_format' => 'd4bc569e090acbbc17354bd3657adb4d'
+            ]
+        ], 400);
+    }
+    
+    return $normalized;
 }
 
 function formatUserResponse($user) {

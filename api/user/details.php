@@ -13,6 +13,8 @@ if (empty($userId)) {
     respond(['success' => false, 'error' => 'User ID required'], 400);
 }
 
+$userId = requireValidId($userId, 'User ID');
+
 $db = getDB();
 $stmt = $db->prepare("SELECT * FROM users WHERE id = :id");
 $stmt->execute(['id' => $userId]);

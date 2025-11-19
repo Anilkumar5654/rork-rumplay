@@ -12,6 +12,8 @@ if (empty($channelId)) {
     respond(['success' => false, 'error' => 'Channel ID required'], 400);
 }
 
+$channelId = requireValidId($channelId, 'Channel ID');
+
 error_log('[channel/details.php] Looking for channel: ' . $channelId);
 
 try {

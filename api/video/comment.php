@@ -15,6 +15,8 @@ if (empty($videoId) || empty($comment)) {
     respond(['success' => false, 'error' => 'Video ID and comment required'], 400);
 }
 
+$videoId = requireValidId($videoId, 'Video ID');
+
 $db = getDB();
 
 $stmt = $db->prepare("SELECT id FROM videos WHERE id = :video_id");
