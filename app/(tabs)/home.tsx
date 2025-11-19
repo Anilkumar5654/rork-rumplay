@@ -9,6 +9,7 @@ import {
   Image,
   Dimensions,
   RefreshControl,
+  ActivityIndicator,
 } from "react-native";
 import { Search, Mic, Plus } from "lucide-react-native";
 import { useRouter } from "expo-router";
@@ -18,26 +19,83 @@ import ContinueWatchingSection from "../../components/ContinueWatchingSection";
 import { theme } from "../../constants/theme";
 import { useAppState } from "../../contexts/AppStateContext";
 import { useAuth } from "../../contexts/AuthContext";
-import { categories } from "../../mocks/data";
 import { Video } from "../../types";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
-import { RecommendationEngine } from "../../utils/recommendationEngine";
 import { useProfileData } from "@/hooks/useProfileData";
+import { getEnvApiBaseUrl } from "@/utils/env";
 
 const { width } = Dimensions.get("window");
 const FALLBACK_AVATAR_URI = "https://api.dicebear.com/7.x/thumbs/svg?seed=profile" as const;
+
+const categories = [
+  "All",
+  "Technology",
+  "Gaming",
+  "Food",
+  "Fitness",
+  "Music",
+  "Education",
+  "Entertainment",
+  "News",
+  "Sports",
+];
+
+type HomeFeedResponse = {
+  success: boolean;
+  videos: Video[];
+  shorts: Video[];
+  total: number;
+  category: string;
+};
 
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const requireAuth = useRequireAuth();
-  const { videos, currentUser } = useAppState();
+  const { currentUser } = useAppState();
   const { authUser } = useAuth();
   const { profile } = useProfileData();
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [shorts, setShorts] = useState<Video[]>([]);
   const autoLaunchRef = useRef(false);
+
+  const fetchHomeFeed = async (category: string = "All") => {
+    try {
+      setLoading(true);
+      const baseUrl = getEnvApiBaseUrl();
+      const url = `${baseUrl}/api/video/home_feed.php?category=${encodeURIComponent(category)}&limit=20`;
+      
+      console.log('[HomeScreen] Fetching home feed:', url);
+      
+      const response = await fetch(url);
+      const data: HomeFeedResponse = await response.json();
+      
+      console.log('[HomeScreen] Home feed response:', data);
+      
+      if (data.success) {
+        setVideos(data.videos || []);
+        setShorts(data.shorts || []);
+      } else {
+        console.error('[HomeScreen] Failed to fetch home feed');
+        setVideos([]);
+        setShorts([]);
+      }
+    } catch (error) {
+      console.error('[HomeScreen] Error fetching home feed:', error);
+      setVideos([]);
+      setShorts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHomeFeed(selectedCategory);
+  }, [selectedCategory]);
 
   useEffect(() => {
     if (autoLaunchRef.current) {
@@ -58,21 +116,6 @@ export default function HomeScreen() {
       router.push(`/video/${firstVideoId}`);
     });
   }, [router, videos]);
-
-  const shorts = videos.filter((video) => video.isShort);
-  const regularVideos = videos.filter((video) => !video.isShort);
-
-  const filteredVideos =
-    selectedCategory === "All"
-      ? regularVideos
-      : regularVideos.filter((video) => video.category === selectedCategory);
-
-  const recommendedVideos = RecommendationEngine.getRecommendations(
-    filteredVideos,
-    currentUser,
-    [],
-    20
-  );
 
   const formatViews = (views: number): string => {
     if (views >= 1000000) {
@@ -109,7 +152,7 @@ export default function HomeScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await fetchHomeFeed(selectedCategory);
     setRefreshing(false);
   };
 
@@ -260,9 +303,19 @@ export default function HomeScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recommended</Text>
-          {recommendedVideos.map((video) => (
-            <View key={video.id}>{renderVideoItem({ item: video })}</View>
-          ))}
+          {loading && videos.length === 0 ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+            </View>
+          ) : videos.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No videos available</Text>
+            </View>
+          ) : (
+            videos.map((video) => (
+              <View key={video.id}>{renderVideoItem({ item: video })}</View>
+            ))
+          )}
         </View>
       </ScrollView>
 
@@ -465,5 +518,19 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     fontSize: theme.fontSizes.xs,
     marginTop: 4,
+  },
+  loadingContainer: {
+    padding: theme.spacing.xl,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  emptyContainer: {
+    padding: theme.spacing.xl,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  emptyText: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.fontSizes.md,
   },
 });
