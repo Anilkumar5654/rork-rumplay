@@ -380,19 +380,27 @@ export default function VideoPlayerScreen() {
   }, [reactionMutation, userReaction, videoId, authUser]);
 
   const handleSubscribe = useCallback(() => {
-    if (!channel) {
+    if (!authUser) {
+      Alert.alert("Please login", "You need to login to subscribe to channels");
       return;
     }
+    if (!channel) {
+      Alert.alert("Error", "Channel information not available");
+      return;
+    }
+    console.log("[VideoPlayer] subscribing to channel", channel.id, channel.isSubscribed ? "unsubscribe" : "subscribe");
     const action = channel.isSubscribed ? "unsubscribe" : "subscribe";
     subscriptionMutation.mutate(action, {
       onSuccess: async () => {
+        console.log("[VideoPlayer] subscription successful");
         await refreshAuthUser();
       },
       onError: (error) => {
+        console.error("[VideoPlayer] subscription failed", error);
         Alert.alert("Subscription failed", error.message);
       },
     });
-  }, [channel, subscriptionMutation, refreshAuthUser]);
+  }, [channel, subscriptionMutation, refreshAuthUser, authUser]);
 
   const handleAddComment = useCallback(() => {
     const trimmed = commentText.trim();
