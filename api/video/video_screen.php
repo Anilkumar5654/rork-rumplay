@@ -59,9 +59,15 @@ function handleFetch($db, $videoId, $authUser) {
             u.username as uploader_username,
             u.name as uploader_name,
             u.profile_pic as uploader_profile_pic,
-            u.channel_id as uploader_channel_id
+            u.channel_id as uploader_channel_id,
+            c.name as channel_name,
+            c.handle as channel_handle,
+            c.avatar as channel_avatar,
+            c.banner as channel_banner,
+            c.subscriber_count as channel_subscriber_count
         FROM videos v
         INNER JOIN users u ON v.user_id = u.id
+        LEFT JOIN channels c ON v.channel_id = c.id
         WHERE v.id = :video_id
     ");
     $stmt->execute(['video_id' => $videoId]);
@@ -80,9 +86,18 @@ function handleFetch($db, $videoId, $authUser) {
         'username' => $video['uploader_username'],
         'name' => $video['uploader_name'],
         'profile_pic' => $video['uploader_profile_pic'],
-        'channel_id' => $video['uploader_channel_id']
+        'channel_id' => $video['uploader_channel_id'],
+        'channel' => [
+            'id' => $video['channel_id'],
+            'name' => $video['channel_name'],
+            'handle' => $video['channel_handle'],
+            'avatar' => $video['channel_avatar'],
+            'banner' => $video['channel_banner'],
+            'subscriber_count' => (int)($video['channel_subscriber_count'] ?? 0)
+        ]
     ];
     unset($video['uploader_id'], $video['uploader_username'], $video['uploader_name'], $video['uploader_profile_pic'], $video['uploader_channel_id']);
+    unset($video['channel_name'], $video['channel_handle'], $video['channel_avatar'], $video['channel_banner'], $video['channel_subscriber_count']);
     
     $video['is_liked'] = false;
     $video['is_disliked'] = false;

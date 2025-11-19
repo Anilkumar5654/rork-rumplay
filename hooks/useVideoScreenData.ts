@@ -27,6 +27,14 @@ type BackendVideoDetails = {
     name?: string | null;
     profile_pic?: string | null;
     channel_id: string;
+    channel: {
+      id: string;
+      name: string;
+      handle?: string | null;
+      avatar?: string | null;
+      banner?: string | null;
+      subscriber_count: number;
+    };
   };
   comments_count?: number;
   is_liked?: boolean;
@@ -221,9 +229,9 @@ const mapVideoDetails = (video: BackendVideoDetails, apiRoot: string): Normalize
     createdAt: video.created_at,
     channelId: video.channel_id,
     uploaderId: video.user_id,
-    channelName: video.uploader.name ?? video.uploader.username,
+    channelName: video.uploader.channel.name ?? video.uploader.name ?? video.uploader.username,
     channelUsername: video.uploader.username,
-    channelAvatar: resolveAssetUrl(video.uploader.profile_pic ?? "", apiRoot),
+    channelAvatar: resolveAssetUrl(video.uploader.channel.avatar ?? video.uploader.profile_pic ?? "", apiRoot),
     isLiked: Boolean(video.is_liked),
     isDisliked: Boolean(video.is_disliked),
     isSaved: Boolean(video.is_saved),
