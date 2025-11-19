@@ -15,7 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+
 import { Video as ExpoVideo, ResizeMode, AVPlaybackStatus } from "expo-av";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -36,41 +36,12 @@ import { useAppState } from "@/contexts/AppStateContext";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { useVideoScreenData } from "@/hooks/useVideoScreenData";
 import { useAuth } from "@/contexts/AuthContext";
-import { getEnvApiBaseUrl, getEnvApiRootUrl } from "@/utils/env";
+import { getEnvApiBaseUrl } from "@/utils/env";
 
 const { width, height } = Dimensions.get("window");
 const PLAYER_HEIGHT = width * (9 / 16);
 
-type ReactionAction = "like" | "unlike" | "dislike" | "undislike";
 
-type ReactionResponse = {
-  success: boolean;
-  message?: string;
-  likes?: number;
-  dislikes?: number;
-  error?: string;
-};
-
-type CommentResponse = {
-  success: boolean;
-  comment_id?: string;
-  message?: string;
-  error?: string;
-};
-
-type SubscriptionResponse = {
-  success: boolean;
-  subscriber_count?: number;
-  message?: string;
-  error?: string;
-};
-
-type ViewResponse = {
-  success: boolean;
-  views?: number;
-  message?: string;
-  error?: string;
-};
 
 type ReportOption = {
   id: string;
@@ -83,25 +54,7 @@ const REPORT_OPTIONS: ReportOption[] = [
   { id: "inappropriate", label: "Inappropriate content" },
 ];
 
-const parseJsonStrict = <T,>(input: string): T => {
-  try {
-    return JSON.parse(input) as T;
-  } catch (error) {
-    console.error("[VideoPlayer] parseJsonStrict", error, input.slice(0, 120));
-    throw new Error("Server returned invalid JSON");
-  }
-};
 
-const buildJsonHeaders = (token: string | null): Record<string, string> => {
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-  };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-  return headers;
-};
 
 const formatCompactNumber = (value: number): string => {
   if (value >= 1_000_000_000) {
@@ -183,19 +136,21 @@ export default function VideoPlayerScreen() {
     return null;
   }, [rawVideoId]);
   const insets = useSafeAreaInsets();
-  const { authUser, authToken, refreshAuthUser } = useAuth();
+  const { authUser, refreshAuthUser } = useAuth();
   const { addToWatchHistory, getWatchPosition, settings } = useAppState();
   const { videoRef, setCurrentVideoId, minimizePlayer } = usePlayer();
-  const queryClient = useQueryClient();
-  const apiRoot = useMemo(() => getEnvApiRootUrl(), []);
   const appBaseUrl = useMemo(() => getEnvApiBaseUrl(), []);
 
   const {
     data,
-    videoQuery,
-    channelQuery,
-    commentsQuery,
-    recommendedQuery,
+    isLoading,
+    isError,
+    error: fetchError,
+    refetch,
+    reactionMutation,
+    commentMutation,
+    subscriptionMutation,
+    viewMutation,
   } = useVideoScreenData(videoId);
 
   const video = data.video;
@@ -260,23 +215,7 @@ export default function VideoPlayerScreen() {
     setUserReaction(null);
   }, [video]);
 
-  const { mutate: incrementView } = useMutation<ViewResponse, Error, string>({
-    mutationFn: async (targetVideoId) => {
-      console.log("[VideoPlayer] incrementing view", targetVideoId);
-      const response = await fetch(`${apiRoot}/video/view.php`, {
-        method: "POST",
-        headers: buildJsonHeaders(authToken ?? null),
-        body: JSON.stringify({ video_id: targetVideoId }),
-      });
-      const raw = await response.text();
-      const data = parseJsonStrict<ViewResponse>(raw);
-      if (!response.ok || !data.success) {
-        const message = data.error ?? data.message ?? `Request failed with status ${response.status}`;
-        throw new Error(message);
-      }
-      return data;
-    },
-  });
+
 
   useEffect(() => {
     if (!video?.id) {
@@ -286,122 +225,18 @@ export default function VideoPlayerScreen() {
       return;
     }
     viewedVideoRef.current = video.id;
-    incrementView(video.id, {
+    viewMutation.mutate(video.id, {
       onError: (error) => {
         console.error("[VideoPlayer] view increment failed", error);
       },
     });
-  }, [video?.id, incrementView]);
+  }, [video?.id, viewMutation]);
 
-  const {
-    mutate: sendReaction,
-    isPending: isReactionPending,
-  } = useMutation<ReactionResponse, Error, ReactionAction>({
-    mutationFn: async (action) => {
-      if (!videoId) {
-        throw new Error("Missing video");
-      }
-      if (!authToken) {
-        throw new Error("Please login to react to videos");
-      }
-      console.log("[VideoPlayer] reaction", action, videoId);
-      const response = await fetch(`${apiRoot}/video/like.php`, {
-        method: "POST",
-        headers: buildJsonHeaders(authToken),
-        body: JSON.stringify({
-          video_id: videoId,
-          action,
-        }),
-      });
-      const raw = await response.text();
-      const data = parseJsonStrict<ReactionResponse>(raw);
-      if (!response.ok || !data.success) {
-        const message = data.error ?? data.message ?? `Request failed with status ${response.status}`;
-        throw new Error(message);
-      }
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["video", "details"] });
-    },
-    onError: (error) => {
-      Alert.alert("Reaction failed", error.message);
-    },
-  });
 
-  const {
-    mutate: updateSubscription,
-    isPending: isSubscribePending,
-  } = useMutation<SubscriptionResponse, Error, "subscribe" | "unsubscribe">({
-    mutationFn: async (action) => {
-      if (!channel?.id) {
-        throw new Error("Channel not available");
-      }
-      if (!authToken) {
-        throw new Error("Please login to manage subscriptions");
-      }
-      const endpoint = action === "subscribe" ? "subscribe.php" : "unsubscribe.php";
-      console.log("[VideoPlayer] subscription", action, channel.id);
-      const response = await fetch(`${apiRoot}/subscription/${endpoint}`, {
-        method: "POST",
-        headers: buildJsonHeaders(authToken),
-        body: JSON.stringify({ channel_id: channel.id }),
-      });
-      const raw = await response.text();
-      const data = parseJsonStrict<SubscriptionResponse>(raw);
-      if (!response.ok || !data.success) {
-        const message = data.error ?? data.message ?? `Request failed with status ${response.status}`;
-        throw new Error(message);
-      }
-      return data;
-    },
-    onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: ["channel", "details"] });
-      queryClient.invalidateQueries({ queryKey: ["video", "details"] });
-      await refreshAuthUser();
-    },
-    onError: (error) => {
-      Alert.alert("Subscription failed", error.message);
-    },
-  });
 
-  const {
-    mutate: submitComment,
-    isPending: isCommentPending,
-  } = useMutation<CommentResponse, Error, string>({
-    mutationFn: async (message) => {
-      if (!videoId) {
-        throw new Error("Missing video");
-      }
-      if (!authToken) {
-        throw new Error("Please login to comment");
-      }
-      console.log("[VideoPlayer] adding comment", videoId);
-      const response = await fetch(`${apiRoot}/video/comment.php`, {
-        method: "POST",
-        headers: buildJsonHeaders(authToken),
-        body: JSON.stringify({
-          video_id: videoId,
-          comment: message,
-        }),
-      });
-      const raw = await response.text();
-      const data = parseJsonStrict<CommentResponse>(raw);
-      if (!response.ok || !data.success) {
-        const message = data.error ?? data.message ?? `Request failed with status ${response.status}`;
-        throw new Error(message);
-      }
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["video", "comments"] });
-      queryClient.invalidateQueries({ queryKey: ["video", "details"] });
-      setCommentText("");
-    },
-    onError: (error) => {
-      Alert.alert("Comment failed", error.message);
-    },
-  });
+
+
+
 
   const handleSafeBack = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -517,38 +352,62 @@ export default function VideoPlayerScreen() {
       return;
     }
     const previous = userReaction;
+    if (!authUser) {
+      Alert.alert("Please login", "You need to login to react to videos");
+      return;
+    }
     if (type === "like") {
-      const nextAction: ReactionAction = previous === "like" ? "unlike" : "like";
+      const nextAction = previous === "like" ? "unlike" : "like";
       const nextState = previous === "like" ? null : "like";
       setUserReaction(nextState);
-      sendReaction(nextAction, {
-        onError: () => setUserReaction(previous),
+      reactionMutation.mutate(nextAction, {
+        onError: (error) => {
+          setUserReaction(previous);
+          Alert.alert("Reaction failed", error.message);
+        },
       });
     } else {
-      const nextAction: ReactionAction = previous === "dislike" ? "undislike" : "dislike";
+      const nextAction = previous === "dislike" ? "undislike" : "dislike";
       const nextState = previous === "dislike" ? null : "dislike";
       setUserReaction(nextState);
-      sendReaction(nextAction, {
-        onError: () => setUserReaction(previous),
+      reactionMutation.mutate(nextAction, {
+        onError: (error) => {
+          setUserReaction(previous);
+          Alert.alert("Reaction failed", error.message);
+        },
       });
     }
-  }, [sendReaction, userReaction, videoId]);
+  }, [reactionMutation, userReaction, videoId, authUser]);
 
   const handleSubscribe = useCallback(() => {
     if (!channel) {
       return;
     }
     const action = channel.isSubscribed ? "unsubscribe" : "subscribe";
-    updateSubscription(action);
-  }, [channel, updateSubscription]);
+    subscriptionMutation.mutate(action, {
+      onSuccess: async () => {
+        await refreshAuthUser();
+      },
+      onError: (error) => {
+        Alert.alert("Subscription failed", error.message);
+      },
+    });
+  }, [channel, subscriptionMutation, refreshAuthUser]);
 
   const handleAddComment = useCallback(() => {
     const trimmed = commentText.trim();
     if (trimmed.length === 0) {
       return;
     }
-    submitComment(trimmed);
-  }, [commentText, submitComment]);
+    commentMutation.mutate(trimmed, {
+      onSuccess: () => {
+        setCommentText("");
+      },
+      onError: (error) => {
+        Alert.alert("Comment failed", error.message);
+      },
+    });
+  }, [commentText, commentMutation]);
 
   const handleShare = useCallback(async () => {
     if (!video) {
@@ -572,8 +431,7 @@ export default function VideoPlayerScreen() {
     Alert.alert("Report submitted", "Thanks for helping keep the community safe.");
   }, []);
 
-  const isLoading = (videoQuery.isLoading || channelQuery.isLoading) && !video;
-  const fatalError = videoQuery.error || channelQuery.error;
+  const fatalError = fetchError;
 
   const channelAvatarUri = useMemo(() => {
     if (channel?.avatar) {
@@ -632,10 +490,7 @@ export default function VideoPlayerScreen() {
       <View style={styles.fallbackContainer} testID="video-error-screen">
         <Text style={styles.fallbackText}>{message}</Text>
         <TouchableOpacity
-          onPress={() => {
-            videoQuery.refetch();
-            channelQuery.refetch();
-          }}
+          onPress={() => refetch()}
           style={styles.fallbackButton}
           testID="video-error-retry-button"
         >
@@ -742,7 +597,7 @@ export default function VideoPlayerScreen() {
           <TouchableOpacity
             style={[styles.actionButton, userReaction === "like" && styles.actionButtonActive]}
             onPress={() => handleReaction("like")}
-            disabled={isReactionPending}
+            disabled={reactionMutation.isPending}
             testID="video-like-button"
           >
             <ThumbsUp
@@ -758,7 +613,7 @@ export default function VideoPlayerScreen() {
           <TouchableOpacity
             style={[styles.actionButton, userReaction === "dislike" && styles.actionButtonActive]}
             onPress={() => handleReaction("dislike")}
-            disabled={isReactionPending}
+            disabled={reactionMutation.isPending}
             testID="video-dislike-button"
           >
             <ThumbsDown
@@ -799,7 +654,7 @@ export default function VideoPlayerScreen() {
           <TouchableOpacity
             style={[styles.subscribeButton, isSubscribed && styles.subscribedButton]}
             onPress={handleSubscribe}
-            disabled={isSubscribePending}
+            disabled={subscriptionMutation.isPending}
             testID="video-subscribe-button"
           >
             <Text style={[styles.subscribeText, isSubscribed && styles.subscribedText]}>
@@ -839,14 +694,14 @@ export default function VideoPlayerScreen() {
               />
               <TouchableOpacity
                 onPress={handleAddComment}
-                disabled={!authUser || isCommentPending || commentText.trim().length === 0}
+                disabled={!authUser || commentMutation.isPending || commentText.trim().length === 0}
                 testID="video-comment-submit"
               >
                 <Send color={authUser ? theme.colors.primary : theme.colors.textSecondary} size={24} />
               </TouchableOpacity>
             </View>
 
-            {commentsQuery.isError && (
+            {isError && (
               <Text style={styles.commentsErrorText}>Unable to load comments at the moment.</Text>
             )}
 
@@ -871,7 +726,7 @@ export default function VideoPlayerScreen() {
 
         <View style={styles.relatedSection}>
           <Text style={styles.sectionTitle}>Related Videos</Text>
-          {recommendedQuery.isError && (
+          {isError && (
             <Text style={styles.relatedErrorText}>Unable to load related videos right now.</Text>
           )}
           {relatedVideos.map((relatedVideo) => (

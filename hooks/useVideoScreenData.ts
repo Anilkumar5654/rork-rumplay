@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { getEnvApiRootUrl } from "@/utils/env";
 
@@ -34,13 +34,6 @@ type BackendVideoDetails = {
   is_disliked?: boolean;
 };
 
-type BackendVideoDetailsResponse = {
-  success: boolean;
-  video?: BackendVideoDetails;
-  error?: string;
-  message?: string;
-};
-
 type BackendChannelDetails = {
   id: string;
   user_id: string;
@@ -57,13 +50,6 @@ type BackendChannelDetails = {
   is_subscribed?: boolean;
 };
 
-type BackendChannelResponse = {
-  success: boolean;
-  channel?: BackendChannelDetails;
-  error?: string;
-  message?: string;
-};
-
 type BackendCommentUser = {
   username: string;
   name?: string | null;
@@ -77,13 +63,6 @@ type BackendComment = {
   comment: string;
   created_at: string;
   user: BackendCommentUser;
-};
-
-type BackendCommentsResponse = {
-  success: boolean;
-  comments?: BackendComment[];
-  error?: string;
-  message?: string;
 };
 
 type BackendRecommendedVideo = {
@@ -103,9 +82,12 @@ type BackendRecommendedVideo = {
   };
 };
 
-type BackendRecommendedResponse = {
+type VideoScreenResponse = {
   success: boolean;
-  videos?: BackendRecommendedVideo[];
+  video?: BackendVideoDetails;
+  channel?: BackendChannelDetails;
+  comments?: BackendComment[];
+  recommended?: BackendRecommendedVideo[];
   error?: string;
   message?: string;
 };
@@ -167,6 +149,17 @@ type VideoScreenData = {
   channel: NormalizedChannelDetails | null;
   comments: NormalizedComment[];
   related: NormalizedRecommendedVideo[];
+};
+
+type MutationActionResponse = {
+  success: boolean;
+  message?: string;
+  likes?: number;
+  dislikes?: number;
+  subscriber_count?: number;
+  comment_id?: string;
+  views?: number;
+  error?: string;
 };
 
 const parseJsonStrict = <T>(input: string): T => {
@@ -287,128 +280,160 @@ const buildAuthHeaders = (token: string | null): Record<string, string> => {
   };
 };
 
-export const useVideoDetailsQuery = (videoId: string | null, apiRoot: string, token: string | null) => {
-  return useQuery({
-    queryKey: ["video", "details", apiRoot, videoId, token],
-    enabled: Boolean(videoId),
-    queryFn: async () => {
-      if (!videoId) {
-        throw new Error("Missing video id");
-      }
-      console.log("[useVideoScreenData] fetching video details", videoId);
-      const response = await fetch(`${apiRoot}/video/details.php?video_id=${encodeURIComponent(videoId)}`, {
-        method: "GET",
-        headers: buildAuthHeaders(token),
-      });
-      const raw = await response.text();
-      const data = parseJsonStrict<BackendVideoDetailsResponse>(raw);
-      if (!response.ok || !data.success || !data.video) {
-        const message = data.error ?? data.message ?? `Request failed with status ${response.status}`;
-        console.error("[useVideoScreenData] video details failed", message, raw.slice(0, 200));
-        throw new Error(message);
-      }
-      return mapVideoDetails(data.video, apiRoot);
-    },
-  });
-};
-
-export const useChannelDetailsQuery = (channelId: string | null, apiRoot: string, token: string | null) => {
-  return useQuery({
-    queryKey: ["channel", "details", apiRoot, channelId, token],
-    enabled: Boolean(channelId),
-    queryFn: async () => {
-      if (!channelId) {
-        throw new Error("Missing channel id");
-      }
-      console.log("[useVideoScreenData] fetching channel details", channelId);
-      const response = await fetch(`${apiRoot}/channel/details.php?channel_id=${encodeURIComponent(channelId)}`, {
-        method: "GET",
-        headers: buildAuthHeaders(token),
-      });
-      const raw = await response.text();
-      const data = parseJsonStrict<BackendChannelResponse>(raw);
-      if (!response.ok || !data.success || !data.channel) {
-        const message = data.error ?? data.message ?? `Request failed with status ${response.status}`;
-        console.error("[useVideoScreenData] channel details failed", message, raw.slice(0, 200));
-        throw new Error(message);
-      }
-      return mapChannelDetails(data.channel, apiRoot);
-    },
-  });
-};
-
-export const useVideoCommentsQuery = (videoId: string | null, apiRoot: string, token: string | null) => {
-  return useQuery({
-    queryKey: ["video", "comments", apiRoot, videoId, token],
-    enabled: Boolean(videoId),
-    queryFn: async () => {
-      if (!videoId) {
-        throw new Error("Missing video id");
-      }
-      console.log("[useVideoScreenData] fetching comments", videoId);
-      const response = await fetch(`${apiRoot}/video/comments.php?video_id=${encodeURIComponent(videoId)}`, {
-        method: "GET",
-        headers: buildAuthHeaders(token),
-      });
-      const raw = await response.text();
-      const data = parseJsonStrict<BackendCommentsResponse>(raw);
-      if (!response.ok || !data.success || !data.comments) {
-        const message = data.error ?? data.message ?? `Request failed with status ${response.status}`;
-        console.error("[useVideoScreenData] comments failed", message, raw.slice(0, 200));
-        throw new Error(message);
-      }
-      return data.comments.map((item) => mapComment(item, apiRoot));
-    },
-  });
-};
-
-export const useRecommendedVideosQuery = (videoId: string | null, apiRoot: string, token: string | null) => {
-  return useQuery({
-    queryKey: ["video", "recommended", apiRoot, videoId, token],
-    enabled: Boolean(videoId),
-    queryFn: async () => {
-      if (!videoId) {
-        throw new Error("Missing video id");
-      }
-      console.log("[useVideoScreenData] fetching recommended", videoId);
-      const response = await fetch(`${apiRoot}/video/recommended.php?video_id=${encodeURIComponent(videoId)}`, {
-        method: "GET",
-        headers: buildAuthHeaders(token),
-      });
-      const raw = await response.text();
-      const data = parseJsonStrict<BackendRecommendedResponse>(raw);
-      if (!response.ok || !data.success || !data.videos) {
-        const message = data.error ?? data.message ?? `Request failed with status ${response.status}`;
-        console.error("[useVideoScreenData] recommended failed", message, raw.slice(0, 200));
-        throw new Error(message);
-      }
-      return data.videos.map((item) => mapRecommended(item, apiRoot));
-    },
-  });
+const buildJsonHeaders = (token: string | null): Record<string, string> => {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
 };
 
 export const useVideoScreenData = (videoId: string | null) => {
   const { authToken } = useAuth();
   const apiRoot = getEnvApiRootUrl();
-  const videoQuery = useVideoDetailsQuery(videoId, apiRoot, authToken);
-  const channelId = videoQuery.data?.channelId ?? null;
-  const channelQuery = useChannelDetailsQuery(channelId, apiRoot, authToken);
-  const commentsQuery = useVideoCommentsQuery(videoId, apiRoot, authToken);
-  const recommendedQuery = useRecommendedVideosQuery(videoId, apiRoot, authToken);
+  const queryClient = useQueryClient();
 
-  const data: VideoScreenData = useMemo(() => ({
-    video: videoQuery.data ?? null,
-    channel: channelQuery.data ?? null,
-    comments: commentsQuery.data ?? [],
-    related: recommendedQuery.data ?? [],
-  }), [videoQuery.data, channelQuery.data, commentsQuery.data, recommendedQuery.data]);
+  const videoScreenQuery = useQuery({
+    queryKey: ["video_screen", apiRoot, videoId, authToken],
+    enabled: Boolean(videoId),
+    queryFn: async () => {
+      if (!videoId) {
+        throw new Error("Missing video id");
+      }
+      console.log("[useVideoScreenData] fetching all data for video", videoId);
+      const response = await fetch(
+        `${apiRoot}/video/video_screen.php?action=fetch&video_id=${encodeURIComponent(videoId)}`,
+        {
+          method: "GET",
+          headers: buildAuthHeaders(authToken),
+        }
+      );
+      const raw = await response.text();
+      const data = parseJsonStrict<VideoScreenResponse>(raw);
+      if (!response.ok || !data.success || !data.video) {
+        const message = data.error ?? data.message ?? `Request failed with status ${response.status}`;
+        console.error("[useVideoScreenData] fetch failed", message, raw.slice(0, 200));
+        throw new Error(message);
+      }
+
+      return {
+        video: mapVideoDetails(data.video, apiRoot),
+        channel: data.channel ? mapChannelDetails(data.channel, apiRoot) : null,
+        comments: (data.comments ?? []).map((item) => mapComment(item, apiRoot)),
+        recommended: (data.recommended ?? []).map((item) => mapRecommended(item, apiRoot)),
+      };
+    },
+  });
+
+  const reactionMutation = useMutation({
+    mutationFn: async (action: "like" | "unlike" | "dislike" | "undislike") => {
+      if (!videoId) throw new Error("Missing video");
+      if (!authToken) throw new Error("Please login to react to videos");
+
+      console.log("[useVideoScreenData] reaction", action, videoId);
+      const response = await fetch(`${apiRoot}/video/video_screen.php?action=${action}`, {
+        method: "POST",
+        headers: buildJsonHeaders(authToken),
+        body: JSON.stringify({ video_id: videoId }),
+      });
+      const raw = await response.text();
+      const data = parseJsonStrict<MutationActionResponse>(raw);
+      if (!response.ok || !data.success) {
+        throw new Error(data.error ?? data.message ?? "Reaction failed");
+      }
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["video_screen"] });
+    },
+  });
+
+  const commentMutation = useMutation({
+    mutationFn: async (comment: string) => {
+      if (!videoId) throw new Error("Missing video");
+      if (!authToken) throw new Error("Please login to comment");
+
+      console.log("[useVideoScreenData] adding comment", videoId);
+      const response = await fetch(`${apiRoot}/video/video_screen.php?action=comment`, {
+        method: "POST",
+        headers: buildJsonHeaders(authToken),
+        body: JSON.stringify({ video_id: videoId, comment }),
+      });
+      const raw = await response.text();
+      const data = parseJsonStrict<MutationActionResponse>(raw);
+      if (!response.ok || !data.success) {
+        throw new Error(data.error ?? data.message ?? "Comment failed");
+      }
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["video_screen"] });
+    },
+  });
+
+  const subscriptionMutation = useMutation({
+    mutationFn: async (action: "subscribe" | "unsubscribe") => {
+      if (!videoId) throw new Error("Missing video");
+      if (!authToken) throw new Error("Please login to manage subscriptions");
+
+      console.log("[useVideoScreenData] subscription", action, videoId);
+      const response = await fetch(`${apiRoot}/video/video_screen.php?action=${action}`, {
+        method: "POST",
+        headers: buildJsonHeaders(authToken),
+        body: JSON.stringify({ video_id: videoId }),
+      });
+      const raw = await response.text();
+      const data = parseJsonStrict<MutationActionResponse>(raw);
+      if (!response.ok || !data.success) {
+        throw new Error(data.error ?? data.message ?? "Subscription failed");
+      }
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["video_screen"] });
+    },
+  });
+
+  const viewMutation = useMutation({
+    mutationFn: async (targetVideoId: string) => {
+      console.log("[useVideoScreenData] incrementing view", targetVideoId);
+      const response = await fetch(`${apiRoot}/video/video_screen.php?action=increment_view`, {
+        method: "POST",
+        headers: buildJsonHeaders(authToken ?? null),
+        body: JSON.stringify({ video_id: targetVideoId }),
+      });
+      const raw = await response.text();
+      const data = parseJsonStrict<MutationActionResponse>(raw);
+      if (!response.ok || !data.success) {
+        throw new Error(data.error ?? data.message ?? "View increment failed");
+      }
+      return data;
+    },
+  });
+
+  const data: VideoScreenData = useMemo(
+    () => ({
+      video: videoScreenQuery.data?.video ?? null,
+      channel: videoScreenQuery.data?.channel ?? null,
+      comments: videoScreenQuery.data?.comments ?? [],
+      related: videoScreenQuery.data?.recommended ?? [],
+    }),
+    [videoScreenQuery.data]
+  );
 
   return {
     data,
-    videoQuery,
-    channelQuery,
-    commentsQuery,
-    recommendedQuery,
+    isLoading: videoScreenQuery.isLoading,
+    isError: videoScreenQuery.isError,
+    error: videoScreenQuery.error,
+    refetch: videoScreenQuery.refetch,
+    reactionMutation,
+    commentMutation,
+    subscriptionMutation,
+    viewMutation,
   };
 };
 
